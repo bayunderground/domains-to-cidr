@@ -3,7 +3,9 @@
 Русская версия: [README_RU.md](README_RU.md)
 
 ## Contents
-- `urls.txt`: input URLs (not in git)
+- `*.har`: Chrome DevTools network exports, top level of the project folder. Converted to `urls.txt` and deleted by `run.sh`
+- `extract-har.py`: replaces `urls.txt` with every request URL from the top-level `.har` files, then deletes each file that was read successfully
+- `urls.txt`: input URLs, created from `.har` files and removed after `run.sh` uses it (not in git)
 - `extract-domains.py`: merges hostnames from `urls.txt` into `domains.txt`, adding both `host` and `www.host`
 - `domains.txt`: input hostnames (not in git, generated from `urls.txt` and/or edited by hand)
 - `resolve-domains.py`: resolves A and AAAA records into unique IPs
@@ -22,10 +24,16 @@ chmod +x run.sh
 ./run.sh
 ```
 
-`run.sh` first runs `extract-domains.py`. If `urls.txt` exists, its hosts are
-merged into `domains.txt` (existing entries are kept, duplicates removed).
-Lines that are not http(s) URLs, and IP-address hosts, are skipped with a
-warning. If `urls.txt` is missing, this step is skipped.
+`run.sh` first runs `extract-har.py`. If there are top-level `.har` files, it
+replaces `urls.txt` with all their request URLs and deletes each file that was
+read. Unreadable `.har` files are kept and reported.
+
+Then `run.sh` runs `extract-domains.py`. Its hosts are merged into
+`domains.txt` (existing entries are kept, duplicates removed). Lines that are
+not http(s) URLs, and IP-address hosts, are skipped with a warning.
+
+After that, `run.sh` deletes `urls.txt`. Do not keep manual changes in
+`urls.txt`; they will be removed on the next run.
 
 Note: the resolver overwrites `ips.txt`. Back up manually added IPs first.
 

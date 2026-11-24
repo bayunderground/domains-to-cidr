@@ -11,14 +11,16 @@ command -v getent >/dev/null 2>&1 || {
     exit 1
 }
 
-chmod +x resolve-domains.py aggregate-cidrs.py extract-domains.py
+chmod +x resolve-domains.py aggregate-cidrs.py extract-domains.py extract-har.py
 
 if [[ -f resolve.pid ]] && kill -0 "$(cat resolve.pid)" 2>/dev/null; then
     echo "Resolver is already running with PID $(cat resolve.pid)." >&2
     exit 1
 fi
 
+python3 extract-har.py
 python3 extract-domains.py
+rm -f urls.txt
 
 nohup sh -c 'python3 -u resolve-domains.py && python3 -u update-networks.py' > nohup.out 2>&1 &
 echo $! > resolve.pid
