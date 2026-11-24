@@ -3,7 +3,9 @@
 Русская версия: [README_RU.md](README_RU.md)
 
 ## Contents
-- `domains.txt`: input hostnames
+- `urls.txt`: input URLs (not in git)
+- `extract-domains.py`: merges hostnames from `urls.txt` into `domains.txt`, adding both `host` and `www.host`
+- `domains.txt`: input hostnames (not in git, generated from `urls.txt` and/or edited by hand)
 - `resolve-domains.py`: resolves A and AAAA records into unique IPs
 - `aggregate-cidrs.py`: aggregates `ips.txt` into exact CIDR ranges
 - `update-networks.py`: appends new IPv4 /24 networks from `ips.txt` to `networks-24.txt`
@@ -19,6 +21,13 @@
 chmod +x run.sh
 ./run.sh
 ```
+
+`run.sh` first runs `extract-domains.py`. If `urls.txt` exists, its hosts are
+merged into `domains.txt` (existing entries are kept, duplicates removed).
+Lines that are not http(s) URLs, and IP-address hosts, are skipped with a
+warning. If `urls.txt` is missing, this step is skipped.
+
+Note: the resolver overwrites `ips.txt`. Back up manually added IPs first.
 
 ## Monitor
 ```bash
