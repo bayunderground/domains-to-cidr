@@ -2,3 +2,4 @@ resolve.*
 domains.txt
 ips.txt
 urls.txt
+*.har
