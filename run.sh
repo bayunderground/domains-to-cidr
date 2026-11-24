@@ -20,10 +20,10 @@ fi
 
 python3 extract-domains.py
 
-nohup python3 -u resolve-domains.py > nohup.out 2>&1 &
+nohup sh -c 'python3 -u resolve-domains.py && python3 -u update-networks.py' > nohup.out 2>&1 &
 echo $! > resolve.pid
 
 echo "Started DNS resolver (PID $(cat resolve.pid))."
 echo "Monitor: tail -f resolve.log"
 echo "Check:   ps -p \"$(cat resolve.pid)\" -o pid,etime,cmd"
-echo "After completion: python3 aggregate-cidrs.py"
+echo "After completion: networks.txt is updated automatically; optional: python3 aggregate-cidrs.py"

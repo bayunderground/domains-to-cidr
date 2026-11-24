@@ -8,7 +8,7 @@
 - `domains.txt`: input hostnames (not in git, generated from `urls.txt` and/or edited by hand)
 - `resolve-domains.py`: resolves A and AAAA records into unique IPs
 - `aggregate-cidrs.py`: aggregates `ips.txt` into exact CIDR ranges
-- `update-networks.py`: appends new IPv4 /24 networks from `ips.txt` to `networks-24.txt`
+- `update-networks.py`: expands IPv4 addresses from `ips.txt` into networks (max /20) and appends new ones to `networks.txt`
 - `run.sh`: starts DNS resolution in the background with `nohup`
 
 ## Requirements
@@ -47,17 +47,22 @@ python3 aggregate-cidrs.py
 cat cidrs.txt
 ```
 
-## Update /24 networks
-Run after editing `ips.txt` (manually or after resolution):
+## Expand networks
+`update-networks.py` groups IPv4 addresses from `ips.txt` into /24s, merges
+adjacent /24s into larger blocks, and never makes a block larger than /20.
+`run.sh` runs it automatically after the resolver finishes. You can also run it
+by hand after editing `ips.txt`:
 ```bash
 python3 update-networks.py
 ```
-New IPv4 /24 networks are appended to `networks-24.txt` after a comment line.
-Existing lines are never removed. IPv6 and invalid lines are skipped.
+`networks.txt` is append-only. New blocks are added after a comment line, and
+only address space not already listed is appended. Existing lines are never
+removed, even if their IPs were removed from `ips.txt`. IPv6 and invalid lines
+are skipped.
 
 ## Output files
 - `ips.txt`: unique resolved IPv4 and IPv6 addresses
-- `networks-24.txt`: IPv4 /24 networks, appended by `update-networks.py`
+- `networks.txt`: expanded IPv4 networks (max /20), appended by `update-networks.py`
 - `cidrs.txt`: exact aggregated CIDR ranges
 - `resolve.log`: progress log
 - `nohup.out`: process stdout/stderr
