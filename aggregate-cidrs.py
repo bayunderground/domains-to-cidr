@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate IPv4 addresses from ips.txt into exact, minimal CIDR ranges."""
+"""Aggregate IPv4 addresses from ips.txt into exact CIDRs and unique /24 networks."""
 from pathlib import Path
 import ipaddress
 import sys
@@ -7,6 +7,7 @@ import sys
 BASE = Path(__file__).resolve().parent
 INPUT = BASE / "ips.txt"
 OUTPUT = BASE / "cidrs.txt"
+OUTPUT_24 = BASE / "networks-24.txt"
 
 
 def main():
@@ -29,6 +30,7 @@ def main():
         except ValueError:
             invalid.append((line_number, value, "invalid IP address"))
 
+    # Preserve the existing exact/minimal CIDR aggregation.
     networks = list(ipaddress.collapse_addresses(ips))
     networks.sort(key=lambda net: int(net.network_address))
 
@@ -37,9 +39,23 @@ def main():
         encoding="utf-8"
     )
 
+    # Also list the containing /24 for every resolved IPv4 address.
+    # A set removes duplicate networks when several IPs share a subnet.
+    networks_24 = {
+        ipaddress.ip_network(f"{address}/24", strict=False)
+        for address in ips
+    }
+    sorted_networks_24 = sorted(networks_24, key=lambda net: int(net.network_address))
+    OUTPUT_24.write_text(
+        "".join(f"{network}\n" for network in sorted_networks_24),
+        encoding="utf-8"
+    )
+
     print(f"Unique IPv4 addresses: {len(ips)}")
-    print(f"CIDR ranges: {len(networks)}")
+    print(f"Exact CIDR ranges: {len(networks)}")
+    print(f"Unique /24 networks: {len(sorted_networks_24)}")
     print(f"Saved: {OUTPUT}")
+    print(f"Saved: {OUTPUT_24}")
 
     if invalid:
         print(f"Skipped invalid/IPv6 entries: {len(invalid)}", file=sys.stderr)
