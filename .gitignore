@@ -3,3 +3,4 @@ domains.txt
 ips.txt
 urls.txt
 *.har
+nohup.out
