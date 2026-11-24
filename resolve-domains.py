@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Resolve domains.txt to unique IPv4 addresses only (A records)."""
+"""Resolve domains.txt using the host's getent/NSS resolver.
+
+No third-party Python packages are required. Each A/AAAA lookup is run as
+its own subprocess with a hard timeout, so a stuck system resolver cannot
+hold a worker forever.
+"""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import ipaddress
@@ -15,7 +20,7 @@ LOG = BASE / "resolve.log"
 FAILED = BASE / "failed-domains.txt"
 
 WORKERS = 10
-DNS_TIMEOUT = 5       # seconds per lookup
+DNS_TIMEOUT = 5       # seconds per address-family lookup
 RETRIES = 1
 RETRY_DELAY = 0.5
 
@@ -30,10 +35,11 @@ def log(message):
             stream.write(line + "\n")
 
 
-def lookup_ipv4(domain):
-    """Resolve A records through getent, enforcing a hard timeout."""
+def lookup(domain, record_type):
+    """Return IP strings from getent; enforce a hard subprocess timeout."""
+    command = ["getent", f"ahosts{record_type}", domain]
     result = subprocess.run(
-        ["getent", "ahostsv4", domain],
+        command,
         capture_output=True,
         text=True,
         timeout=DNS_TIMEOUT,
@@ -49,34 +55,38 @@ def lookup_ipv4(domain):
             address = ipaddress.ip_address(fields[0])
         except ValueError:
             continue
-        if address.version == 4:
+        if address.version == (4 if record_type == "v4" else 6):
             found.add(str(address))
-
     return found, result.returncode, result.stderr.strip()
 
 
 def resolve(domain):
+    found = set()
     errors = []
 
-    for attempt in range(RETRIES + 1):
-        try:
-            addresses, returncode, stderr = lookup_ipv4(domain)
-            if addresses or returncode == 2:
-                return domain, addresses, errors
-            errors.append(f"getent exit={returncode} {stderr}".strip())
-        except subprocess.TimeoutExpired:
-            errors.append(f"timed out after {DNS_TIMEOUT}s")
-        except Exception as exc:
-            errors.append(str(exc))
+    for record_type in ("v4", "v6"):
+        for attempt in range(RETRIES + 1):
+            try:
+                addresses, returncode, stderr = lookup(domain, record_type)
+                found.update(addresses)
+                if addresses or returncode == 2:
+                    # Success, or no records for this family.
+                    break
+                errors.append(f"{record_type}: getent exit={returncode} {stderr}".strip())
+            except subprocess.TimeoutExpired:
+                errors.append(f"{record_type}: timed out after {DNS_TIMEOUT}s")
+            except Exception as exc:
+                errors.append(f"{record_type}: {exc}")
 
-        if attempt < RETRIES:
-            time.sleep(RETRY_DELAY)
+            if attempt < RETRIES:
+                time.sleep(RETRY_DELAY)
 
-    return domain, set(), errors
+    return domain, found, errors
 
 
 def ip_sort_key(value):
-    return int(ipaddress.IPv4Address(value))
+    address = ipaddress.ip_address(value)
+    return address.version, int(address)
 
 
 def main():
@@ -97,7 +107,7 @@ def main():
 
     all_ips = set()
     failed = []
-    log(f"Starting IPv4-only A-record resolution: {len(domains)} domains; workers={WORKERS}; timeout={DNS_TIMEOUT}s")
+    log(f"Starting: {len(domains)} domains; workers={WORKERS}; timeout={DNS_TIMEOUT}s per query")
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         futures = [pool.submit(resolve, domain) for domain in domains]
@@ -114,13 +124,13 @@ def main():
 
             if not ips:
                 failed.append(domain)
-                detail = "; ".join(errors) if errors else "no A records"
+                detail = "; ".join(errors) if errors else "no A/AAAA records"
                 log(f"[{index}/{len(domains)}] FAILED {domain}: {detail}")
             else:
                 log(f"[{index}/{len(domains)}] {domain}: {', '.join(sorted(ips, key=ip_sort_key))}")
 
     FAILED.write_text("".join(domain + "\n" for domain in failed), encoding="utf-8")
-    log(f"Finished. Unique IPv4 addresses={len(all_ips)}; failed domains={len(failed)}")
+    log(f"Finished. Unique IPs={len(all_ips)}; failed domains={len(failed)}")
     log(f"Results: {OUTPUT.name}; failures: {FAILED.name}")
 
 

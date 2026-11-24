@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate IPv4 addresses from ips.txt into exact CIDRs and unique /24 networks."""
+"""Aggregate IPs from ips.txt into exact, minimal CIDR ranges."""
 from pathlib import Path
 import ipaddress
 import sys
@@ -7,7 +7,6 @@ import sys
 BASE = Path(__file__).resolve().parent
 INPUT = BASE / "ips.txt"
 OUTPUT = BASE / "cidrs.txt"
-OUTPUT_24 = BASE / "networks-24.txt"
 
 
 def main():
@@ -22,45 +21,32 @@ def main():
         if not value or value.startswith("#"):
             continue
         try:
-            address = ipaddress.ip_address(value)
-            if address.version != 4:
-                invalid.append((line_number, value, "IPv6 is not supported"))
-                continue
-            ips.add(address)
+            ips.add(ipaddress.ip_address(value))
         except ValueError:
-            invalid.append((line_number, value, "invalid IP address"))
+            invalid.append((line_number, value))
 
-    # Preserve the existing exact/minimal CIDR aggregation.
-    networks = list(ipaddress.collapse_addresses(ips))
-    networks.sort(key=lambda net: int(net.network_address))
+    networks = []
+    for version in (4, 6):
+        family_ips = [ip for ip in ips if ip.version == version]
+        networks.extend(ipaddress.collapse_addresses(family_ips))
+
+    networks.sort(key=lambda net: (net.version, int(net.network_address)))
 
     OUTPUT.write_text(
         "".join(f"{network}\n" for network in networks),
         encoding="utf-8"
     )
 
-    # Also list the containing /24 for every resolved IPv4 address.
-    # A set removes duplicate networks when several IPs share a subnet.
-    networks_24 = {
-        ipaddress.ip_network(f"{address}/24", strict=False)
-        for address in ips
-    }
-    sorted_networks_24 = sorted(networks_24, key=lambda net: int(net.network_address))
-    OUTPUT_24.write_text(
-        "".join(f"{network}\n" for network in sorted_networks_24),
-        encoding="utf-8"
-    )
-
-    print(f"Unique IPv4 addresses: {len(ips)}")
-    print(f"Exact CIDR ranges: {len(networks)}")
-    print(f"Unique /24 networks: {len(sorted_networks_24)}")
+    print(f"Unique IPs: {len(ips)}")
+    print(f"IPv4: {sum(ip.version == 4 for ip in ips)}")
+    print(f"IPv6: {sum(ip.version == 6 for ip in ips)}")
+    print(f"CIDR ranges: {len(networks)}")
     print(f"Saved: {OUTPUT}")
-    print(f"Saved: {OUTPUT_24}")
 
     if invalid:
-        print(f"Skipped invalid/IPv6 entries: {len(invalid)}", file=sys.stderr)
-        for line_number, value, reason in invalid:
-            print(f"Line {line_number}: {value} ({reason})", file=sys.stderr)
+        print("\nInvalid entries:", file=sys.stderr)
+        for line_number, value in invalid:
+            print(f"Line {line_number}: {value}", file=sys.stderr)
 
 
 if __name__ == "__main__":
