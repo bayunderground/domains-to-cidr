@@ -1,9 +1,11 @@
 # Domains to CIDR
 
+Resolve hostnames to IPv4 addresses and aggregate the results into exact CIDR ranges.
+
 ## Contents
 - `domains.txt`: input hostnames
-- `resolve-domains.py`: resolves A and AAAA records into unique IPs
-- `aggregate-cidrs.py`: aggregates `ips.txt` into exact CIDR ranges
+- `resolve-domains.py`: resolves **A records only** and writes unique IPv4 addresses to `ips.txt`
+- `aggregate-cidrs.py`: aggregates IPv4 addresses from `ips.txt` into CIDR ranges
 - `run.sh`: starts DNS resolution in the background with `nohup`
 
 ## Requirements
@@ -24,10 +26,10 @@ tail -f resolve.log
 tail -f nohup.out
 ```
 
-The resolver uses `getent ahostsv4` and `getent ahostsv6`, with a hard
-subprocess timeout for each lookup and one retry. Results are appended to
-`ips.txt` as domains finish. Re-running `run.sh` is refused while the recorded
-resolver PID is still running.
+The resolver uses `getent ahostsv4` only. It does not query AAAA records
+or collect IPv6 addresses. Each lookup has a hard subprocess timeout and
+one retry. Results are appended to `ips.txt` as domains finish.
+Re-running `run.sh` is refused while the recorded resolver PID is running.
 
 ## Generate CIDRs after resolution finishes
 ```bash
@@ -36,11 +38,11 @@ cat cidrs.txt
 ```
 
 ## Output files
-- `ips.txt`: unique resolved IPv4 and IPv6 addresses
-- `cidrs.txt`: exact aggregated CIDR ranges
+- `ips.txt`: unique resolved IPv4 addresses only
+- `cidrs.txt`: exact aggregated IPv4 CIDR ranges
 - `resolve.log`: progress log
 - `nohup.out`: process stdout/stderr
-- `failed-domains.txt`: domains with no resolved addresses
+- `failed-domains.txt`: domains with no resolved IPv4 addresses
 
-CIDR aggregation does not include addresses absent from `ips.txt`. DNS results
-are a point-in-time snapshot and may change.
+The CIDR aggregation does not include addresses absent from `ips.txt`.
+DNS results are a point-in-time snapshot and may change.

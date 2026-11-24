@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Aggregate IPs from ips.txt into exact, minimal CIDR ranges."""
+"""Aggregate IPv4 addresses from ips.txt into exact, minimal CIDR ranges."""
 from pathlib import Path
 import ipaddress
 import sys
@@ -21,32 +21,30 @@ def main():
         if not value or value.startswith("#"):
             continue
         try:
-            ips.add(ipaddress.ip_address(value))
+            address = ipaddress.ip_address(value)
+            if address.version != 4:
+                invalid.append((line_number, value, "IPv6 is not supported"))
+                continue
+            ips.add(address)
         except ValueError:
-            invalid.append((line_number, value))
+            invalid.append((line_number, value, "invalid IP address"))
 
-    networks = []
-    for version in (4, 6):
-        family_ips = [ip for ip in ips if ip.version == version]
-        networks.extend(ipaddress.collapse_addresses(family_ips))
-
-    networks.sort(key=lambda net: (net.version, int(net.network_address)))
+    networks = list(ipaddress.collapse_addresses(ips))
+    networks.sort(key=lambda net: int(net.network_address))
 
     OUTPUT.write_text(
         "".join(f"{network}\n" for network in networks),
         encoding="utf-8"
     )
 
-    print(f"Unique IPs: {len(ips)}")
-    print(f"IPv4: {sum(ip.version == 4 for ip in ips)}")
-    print(f"IPv6: {sum(ip.version == 6 for ip in ips)}")
+    print(f"Unique IPv4 addresses: {len(ips)}")
     print(f"CIDR ranges: {len(networks)}")
     print(f"Saved: {OUTPUT}")
 
     if invalid:
-        print("\nInvalid entries:", file=sys.stderr)
-        for line_number, value in invalid:
-            print(f"Line {line_number}: {value}", file=sys.stderr)
+        print(f"Skipped invalid/IPv6 entries: {len(invalid)}", file=sys.stderr)
+        for line_number, value, reason in invalid:
+            print(f"Line {line_number}: {value} ({reason})", file=sys.stderr)
 
 
 if __name__ == "__main__":
